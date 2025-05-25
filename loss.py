@@ -12,7 +12,6 @@ class SpikeSparsityLoss(nn.Module):
         self.target = target_sparsity
 
     def forward(self, spikes: torch.Tensor) -> torch.Tensor:
-        # spikes: [B, T, D]
         rate = spikes.mean()
         return (rate - self.target) ** 2
 
@@ -39,22 +38,21 @@ class TemporalConsistencyLoss(nn.Module):
         self.weight = weight
 
     def forward(self, spikes: torch.Tensor) -> torch.Tensor:
-        # spikes: [B, T, D]
         diffs = torch.abs(spikes[:, 1:] - spikes[:, :-1])
         return self.weight * diffs.mean()
 
 class AdaptiveThresholdRegularization(nn.Module):
     """
     Encourages learned thresholds to remain within a stable range.
-    loss = variance of thresholds
+    loss = variance of thresholds (unbiased=False to avoid NaNs for scalar thresholds)
     """
     def __init__(self, weight: float = 0.1):
         super(AdaptiveThresholdRegularization, self).__init__()
         self.weight = weight
 
     def forward(self, threshold_param: nn.Parameter) -> torch.Tensor:
-        # threshold_param: learnable threshold tensor
-        return self.weight * torch.var(threshold_param)
+        # Use unbiased=False so variance of a single element is zero, not NaN
+        return self.weight * torch.var(threshold_param, unbiased=False)
 
 class HybridSpikingLoss(nn.Module):
     """
@@ -100,10 +98,3 @@ class HybridSpikingLoss(nn.Module):
         if threshold_param is not None:
             loss = loss + self.lambda_a * self.threshold_reg(threshold_param)
         return loss
-
-# Example usage:
-# loss_fn = HybridSpikingLoss(lambda_s=0.5, lambda_m=0.1, lambda_t=0.2, lambda_a=0.05)
-# logits = model_output
-# spikes, _, membrane = liquid_block outputs
-# threshold_param = model.liquid_block.threshold
-# loss = loss_fn(logits, labels, spikes, membrane, threshold_param)
