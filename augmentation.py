@@ -201,17 +201,20 @@ class AddEventNoise:
 
 class ToBinnedTensor:
     """
-    Bins raw events into a fixed tensor using a provided encoder.
+    Bins raw events into a fixed tensor using the provided encoder,
+    but runs it under no_grad so we don’t leak gradients into the DataLoader.
     """
     def __init__(self, encoder):
         self.encoder = encoder
 
     def __call__(self, sample: dict) -> dict:
-        events = sample['events'].unsqueeze(0)  # [1,N,4]
-        binned = self.encoder(events)           # [1,T,P]
-        sample['events'] = binned.squeeze(0)    # [T,P]
+        events = sample['events'].unsqueeze(0)  # [1, N, 4]
+        with torch.no_grad():
+            binned = self.encoder(events)         # [1, T, P]
+        # detach to ensure requires_grad=False
+        sample['events'] = binned.squeeze(0).detach()  # [T, P]
         return sample
-
+    
 class Compose:
     """
     Composes several transforms sequentially.

@@ -8,105 +8,134 @@ from snntorch import surrogate
 # ----------------------------------
 # Spike Encoder (Enhanced with Smoothing)
 # ----------------------------------
+
 class SpikeEncoder(nn.Module):
     """
-    Encodes raw event-based input into binned spike tensors with:
+    Encodes raw event‐based input into binned spike tensors with:
       - Learnable/fixed bin edges
-      - Efficient vectorized binning
+      - Efficient vectorized binning via a flat index_add_
       - Gaussian temporal smoothing
-      - Channel-wise (pixel) normalization
-      - Global normalization
+      - Channel‐wise & global LayerNorm
     """
-    def __init__(self,
-                 num_bins: int,
-                 height: int,
-                 width: int,
-                 poisson: bool = False,
-                 learnable_bins: bool = False,
-                 smooth_kernel_size: int = 5):
-        super(SpikeEncoder, self).__init__()
+    def __init__(
+        self,
+        num_bins: int,
+        height: int,
+        width: int,
+        poisson: bool = False,
+        learnable_bins: bool = False,
+        smooth_kernel_size: int = 5
+    ):
+        super().__init__()
         self.num_bins = num_bins
-        self.height = height
-        self.width = width
-        self.poisson = poisson
-        self.P = height * width
-        # Bin edges
+        self.height   = height
+        self.width    = width
+        self.poisson  = poisson
+        self.P        = height * width
+
+        # 1) Bin edges
         edges = torch.linspace(0, 1, num_bins + 1)[1:-1]
         if learnable_bins:
             self.bin_edges = nn.Parameter(edges)
         else:
             self.register_buffer('bin_edges', edges)
-        # Gaussian smoothing conv
+
+        # 2) Depthwise Gaussian smoothing conv
         pad = smooth_kernel_size // 2
         self.smooth_conv = nn.Conv1d(
-            in_channels=self.P, out_channels=self.P,
+            in_channels=self.P,
+            out_channels=self.P,
             kernel_size=smooth_kernel_size,
-            padding=pad, groups=self.P, bias=False
+            padding=pad,
+            groups=self.P,
+            bias=False
         )
-        # Initialize Gaussian kernel
+        # initialize to a fixed Gaussian
         coords = torch.arange(smooth_kernel_size) - pad
-        sigma = smooth_kernel_size / 6.0
-        gauss = torch.exp(-coords**2 / (2 * sigma**2))
-        gauss = gauss / gauss.sum()
-        kernel = gauss.view(1, 1, smooth_kernel_size).repeat(self.P, 1, 1)
+        sigma  = smooth_kernel_size / 6.0
+        gauss  = torch.exp(-coords**2 / (2*sigma**2))
+        gauss /= gauss.sum()
+        kernel = gauss.view(1,1,smooth_kernel_size).repeat(self.P,1,1)
         self.smooth_conv.weight.data.copy_(kernel)
         self.smooth_conv.weight.requires_grad = False
-        # Normalizations
-        self.pixel_norm = nn.LayerNorm(self.P)
+
+        # 3) LayerNorms
+        self.pixel_norm  = nn.LayerNorm(self.P)
         self.global_norm = nn.LayerNorm([num_bins, self.P])
 
     def forward(self, events: torch.Tensor) -> torch.Tensor:
         device = events.device
-        # Binning
-        if events.dim() == 3:
+
+        # If input is raw events [B, N, 4], batch it
+        if events.dim()==2 and events.size(1)==4:
+            events = events.unsqueeze(0)
+
+        # If already binned ([B, T, P]), just cast
+        if events.dim()==3 and events.size(-1)!=4:
             spikes = events.float()
         else:
+            # 1) Raw stream [B, N, 4]
             B, N, _ = events.shape
-            xs = events[:, :, 0].long().clamp(0, self.height - 1)
-            ys = events[:, :, 1].long().clamp(0, self.width - 1)
-            ts = events[:, :, 2].clamp(0, 1)
-            bin_idx = torch.bucketize(ts, self.bin_edges, right=True)
+            xs = events[:,:,0].long().clamp(0, self.height-1)
+            ys = events[:,:,1].long().clamp(0, self.width -1)
+            ts = events[:,:,2].clamp(0.0, 1.0)
+
+            bin_idx   = torch.bucketize(ts, self.bin_edges, right=True)
             pixel_idx = xs * self.width + ys
-            counts = torch.zeros(B, self.num_bins, self.P, device=device)
-            counts_flat = counts.view(B, -1)
-            idx = (bin_idx * self.P + pixel_idx).view(-1)
-            batch_idx = torch.arange(B, device=device).unsqueeze(1).expand(-1, N).reshape(-1)
-            counts_flat.index_add_(0, idx + batch_idx * self.num_bins * self.P,
-                                   torch.ones(B * N, device=device))
+
+            # 2) Flat accumulator
+            total_elems = B * self.num_bins * self.P
+            counts_flat = torch.zeros(total_elems, device=device, dtype=torch.float32)
+
+            # 3) Build 1D indices
+            batch_offset = (torch.arange(B, device=device) * (self.num_bins*self.P))\
+                             .unsqueeze(1)        # [B,1]
+            idx = (batch_offset + bin_idx*self.P + pixel_idx).view(-1)  # [B*N]
+
+            # 4) index_add_
+            ones = torch.ones_like(idx, dtype=torch.float32)
+            counts_flat.index_add_(0, idx, ones)
+
+            # 5) reshape → [B, T, P]
             spikes = counts_flat.view(B, self.num_bins, self.P)
-        # Poisson encoding
+
+        # Poisson (optional)
         if self.poisson:
-            maxc = spikes.amax(dim=2, keepdim=True).clamp(min=1.0)
+            maxc  = spikes.amax(dim=2, keepdim=True).clamp(min=1.0)
             rates = spikes / maxc
             spikes = torch.bernoulli(rates)
+
         # Gaussian smoothing across time
-        sp = spikes.permute(0, 2, 1)
-        sp = self.smooth_conv(sp)
-        spikes = sp.permute(0, 2, 1)
-        # Pixel-wise normalization
+        sp     = spikes.permute(0,2,1)      # [B, P, T]
+        sp     = self.smooth_conv(sp)       # same
+        spikes = sp.permute(0,2,1)          # [B, T, P]
+
+        # Normalize
         spikes = self.pixel_norm(spikes)
-        # Global normalization
         spikes = self.global_norm(spikes)
         return spikes
 
 # ----------------------------------
 # Spiking Patch Embedding
 # ----------------------------------
+
 class SpikingPatchEmbedding(nn.Module):
-    def __init__(self, in_channels: int, embed_dim: int,
-                 kernel_size: int = 3, stride: int = 1, dropout: float = 0.1):
-        super(SpikingPatchEmbedding, self).__init__()
-        self.conv = nn.Conv1d(in_channels, embed_dim,
-                              kernel_size=kernel_size,
-                              stride=stride,
-                              padding=kernel_size//2)
+    """
+    Project each P-dimensional time slice into 'embed_dim' features.
+    Input: x [B, T, P]
+    Output: [B, T, embed_dim]
+    """
+    def __init__(self, num_pixels: int, embed_dim: int, dropout: float = 0.1):
+        super().__init__()
+        self.proj = nn.Linear(num_pixels, embed_dim)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.permute(0, 2, 1)
-        x = self.conv(x)
-        x = x.permute(0, 2, 1)
-        return self.dropout(x)
+        B, T, P = x.shape                           # x is [B, T, P]
+        x = x.reshape(B * T, P)                     # flatten batch/time
+        x = self.proj(x)                            # [B*T, embed_dim]
+        x = self.dropout(x)
+        return x.view(B, T, -1)                     # [B, T, embed_dim]
 
 # ----------------------------------
 # Liquid Time-Constant Block
@@ -193,19 +222,22 @@ class OutputHead(nn.Module):
 # Full Model: Liquid SpikeFormer
 # ----------------------------------
 class LiquidSpikeFormer(nn.Module):
-    def __init__(self,
-                 in_channels: int,
-                 embed_dim: int,
-                 nhead: int,
-                 num_classes: int,
-                 encoder_bins: int,
-                 height: int,
-                 width: int,
-                 poisson: bool = False,
-                 learnable_bins: bool = False,
-                 smooth_kernel_size: int = 5,
-                 dropout: float = 0.1):
+    def __init__(
+        self,
+        in_channels: int,
+        embed_dim: int,
+        nhead: int,
+        num_classes: int,
+        encoder_bins: int,
+        height: int,
+        width: int,
+        poisson: bool = False,
+        learnable_bins: bool = False,
+        smooth_kernel_size: int = 5,
+        dropout: float = 0.1
+    ):
         super(LiquidSpikeFormer, self).__init__()
+        # encoder produces [B, T, P]
         self.encoder = SpikeEncoder(
             num_bins=encoder_bins,
             height=height,
@@ -214,27 +246,27 @@ class LiquidSpikeFormer(nn.Module):
             learnable_bins=learnable_bins,
             smooth_kernel_size=smooth_kernel_size
         )
-        self.patch_embed = SpikingPatchEmbedding(in_channels, embed_dim, dropout=dropout)
+        # patch_embed now projects P->embed_dim
+        P = height * width
+# instead of passing in_channels=num_bins, do:
+        self.patch_embed = SpikingPatchEmbedding(
+            num_pixels=self.encoder.P,   # = height*width
+            embed_dim=embed_dim,
+            dropout=dropout
+        )
         self.liquid_block = LiquidTimeConstantBlock(embed_dim, dropout=dropout)
         self.transformer = SpikingTransformerBlock(d_model=embed_dim, nhead=nhead, dropout=dropout)
         self.head = OutputHead(d_model=embed_dim, num_classes=num_classes, dropout=dropout)
 
     def forward(self, events: torch.Tensor):
-            """
-            Returns a dict with:
-              - logits: [B, num_classes]
-              - spikes: [B, T, D]
-              - membrane: [B, D] (final membrane potentials)
-              - threshold: scalar or [1]
-            """
-            x = self.encoder(events)
-            x = self.patch_embed(x)
-            spikes, _, membrane = self.liquid_block(x)
-            x = self.transformer(spikes)
-            logits = self.head(x)
-            return {
-                'logits': logits,
-                'spikes': spikes,
-                'membrane': membrane,
-                'threshold': self.liquid_block.threshold
-            }
+        x = self.encoder(events)             # [B, T, P]
+        x = self.patch_embed(x)             # [B, T, embed_dim]
+        spikes, _, membrane = self.liquid_block(x)
+        x = self.transformer(spikes)
+        logits = self.head(x)
+        return {
+            'logits': logits,
+            'spikes': spikes,
+            'membrane': membrane,
+            'threshold': self.liquid_block.threshold
+        }
