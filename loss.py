@@ -1,3 +1,4 @@
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -97,4 +98,37 @@ class HybridSpikingLoss(nn.Module):
             loss = loss + self.lambda_m * self.membrane_loss(membrane)
         if threshold_param is not None:
             loss = loss + self.lambda_a * self.threshold_reg(threshold_param)
+        return loss
+
+
+
+
+
+class SupervisedContrastiveLoss(nn.Module):
+    def __init__(self, temperature=0.07):
+        super().__init__()
+        self.temperature = temperature
+
+    def forward(self, features, labels):
+        """
+        Args:
+            features: [B, D] tensor of normalized feature vectors
+            labels:   [B]   ground truth class labels
+        """
+        device = features.device
+        labels = labels.contiguous().view(-1, 1)
+        mask = torch.eq(labels, labels.T).float().to(device)  # [B, B]
+        anchor_dot_contrast = torch.div(torch.matmul(features, features.T), self.temperature)
+        # For numerical stability
+        logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
+        logits = anchor_dot_contrast - logits_max.detach()
+        # Exclude self-comparisons
+        logits_mask = torch.ones_like(mask) - torch.eye(mask.size(0), device=device)
+        mask = mask * logits_mask
+
+        exp_logits = torch.exp(logits) * logits_mask
+        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True) + 1e-8)
+        # Mean of log-likelihood over positive
+        mean_log_prob_pos = (mask * log_prob).sum(1) / (mask.sum(1) + 1e-8)
+        loss = -mean_log_prob_pos.mean()
         return loss
