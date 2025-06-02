@@ -223,6 +223,11 @@ class Compose:
         self.transforms = transforms
 
     def __call__(self, sample: dict) -> dict:
+
         for t in self.transforms:
             sample = t(sample)
         return sample
+
+
+
+
