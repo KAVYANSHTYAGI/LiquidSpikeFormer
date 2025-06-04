@@ -1,141 +1,190 @@
-# LNN
+LiquidSpikeFormer: Hybrid SNN-LNN-Transformer Architecture for Event-Based Vision
 
+A biologically inspired, hybrid deep learning architecture combining Spiking Neural Networks, Liquid Time-Constant Neurons, and Transformer-based temporal attention for robust and energy-efficient event-driven gesture recognition.
 
-A Powerful, Modular, and Easy-to-Use Library for Liquid Neural Networks built on PyTorch
+📅 Motivation
 
-🚀 Overview
+Traditional deep learning models operate on synchronous, dense image data. However, biological brains process information through sparse, asynchronous spike signals. Event cameras like Dynamic Vision Sensors (DVS) mimic this biological process by emitting events only when pixel intensity changes occur. These sensors offer high temporal resolution and low energy cost, but pose unique challenges:
 
-Liquid Neural Networks (LNNs) are dynamic neural networks that adapt their internal structure in real-time, inspired by neuroscience. They utilize continuous-time differential equations, allowing efficient adaptation and learning, particularly suited for sequential, temporal, and dynamically evolving datasets.
+Sparse and irregular input data
 
-This library provides a robust and modular implementation of Liquid Neural Networks, making them as easy to use as traditional deep learning layers. Whether you're researching dynamic neural architectures or deploying them into production, LNN offers flexible, efficient, and powerful tools.
+Need for real-time processing
 
-🎯 Why Use This Library?
+Lack of standard architectures
 
-Modularity: Easily customizable layers and models.
+LiquidSpikeFormer bridges this gap using:
 
-Flexibility: Numerous configuration options (learnable time constants, solvers, activations).
+Spiking dynamics for biological plausibility
 
-Ease of Use: Clean and intuitive API, suitable for rapid prototyping.
+Liquid neurons for dynamic time constants
 
-Performance: Optimized for efficient training and inference.
+Transformer layers for global sequence modeling
 
-Integration: Seamlessly integrates into your existing PyTorch workflows.
+This makes it suitable for neuromorphic hardware and applications such as robotics, AR/VR, prosthetics, and smart surveillance.
 
-📂 Repository Structure
+🔍 Research Objectives
 
-lnn/
-├── layers/
-│   ├── liquid.py           # Core Liquid Neural Network layer
-│   ├── neural_ode.py       # Neural ODE integration
-│   ├── recurrent_liquid.py # Liquid layer with recurrent capabilities
-│   └── utils.py            # Layer-specific utilities
-│
-├── models/
-│   ├── liquid_rnn.py       # Liquid RNN model
-│   ├── liquid_classifier.py# Classification model using Liquid layers
-│   └── liquid_forecaster.py# Forecasting model using Liquid layers
-│
-├── utils/
-│   ├── activations.py      # Custom activation functions
-│   ├── initializations.py  # Weight initialization utilities
-│   └── visualization.py    # Tools for visualizing neuron dynamics
-│
-├── examples/
-│   ├── basic_usage.py      # Basic implementation example
-│   └── advanced_configuration.py # Advanced setup examples
-│
-├── tests/
-│   ├── test_layers.py      # Unit tests for layers
-│   └── test_models.py      # Unit tests for models
-│
-├── setup.py                # Installation script
-├── requirements.txt        # Dependencies
-└── README.md               # This document
+Model biologically plausible, energy-efficient gesture recognition using event data.
 
-🛠 Installation
+Explore hybrid learning dynamics: SNNs for sparse input, LNNs for time-dependence, and Transformers for global context.
 
-Install via PyPI (coming soon):
+Evaluate generalization and temporal robustness across time-variant DVS input streams.
 
-pip install lnn
+Move toward publishable results at top-tier AI venues (NeurIPS, ICLR) by refining architecture, interpretability, and training stability.
 
-Or directly from GitHub:
+🔧 Architecture Breakdown
 
-git clone https://github.com/yourusername/lnn.git
-cd lnn
-pip install .
+1. Dual Spike Encoders (Fine + Coarse)
 
-🔥 Quick Start
+Encodes DVS input into discrete time-binned spike tensors
 
-Here's how easily you can start:
+Captures high-frequency and low-frequency event patterns
 
-import torch
-from lnn.models.liquid_classifier import LiquidClassifier
+2. Conv-SNN Spatial-Temporal Blocks
 
-# Instantiate the model
-model = LiquidClassifier(
-    input_dim=5,
-    hidden_dim=64,
-    num_classes=3,
-    time_steps=50,
-    activation='tanh',
-    learn_tau=True,
-    solver='rk4'
-)
+2D convolution per time bin + temporal 1D convolution
 
-# Dummy input data
-inputs = torch.randn(16, 50, 5)  # [Batch, Time, Features]
+Mimics early visual cortex (V1-like feature detection)
 
-# Forward pass
-outputs = model(inputs)
-print(outputs.shape)  # Output shape: [16, 3]
+3. Liquid Time-Constant Blocks
 
-📖 Documentation
+Neurons with learned dynamic decay (tau)
 
-Layers Documentation
+Simulates membrane potential and adaptive thresholds
 
-Models Documentation
+One block with neuromodulated gating
 
-Examples and Tutorials
+4. Spiking Transformer Layers
 
-(Documentation pages coming soon!)
+Sparse sequence of spikes processed via attention
 
-🌟 Contributing
+Allows long-range temporal dependency modeling
 
-We welcome contributions! To contribute, please:
+5. Early-Exit Classifiers
 
-Fork the repository.
+Heads after key stages: early-mid, early-final, and final
 
-Create a new feature branch (git checkout -b feature/amazing-feature).
+Enable low-latency prediction (real-time response)
 
-Commit your changes (git commit -m 'Add amazing feature').
+6. Hybrid Spiking Loss
 
-Push to your branch (git push origin feature/amazing-feature).
+CrossEntropy + spike sparsity + membrane stability + temporal consistency + threshold variance regularization
 
-Open a Pull Request.
+🔮 Model Diagram (Conceptual)
 
-📝 Citation
+                DVS Events
+                   │
+        ┌---------------------┐
+        │  Fine Spike Encoder  │
+        │ Coarse Spike Encoder │
+        └----------─--------┘
+                   │
+       Conv-SNN Spatial Temporal Blocks
+                   │
+          Conv Projection to Embed Dim
+                   │
+     ┌----------------------------┐
+     │ PatchEmbeds + Frame Embeds │
+     └-------------─----------┘
+                   │
+        Merge Projection (4 Streams)
+                   │
+      Liquid Time Constant Block 1
+                   │
+      Liquid Time Constant Block 2
+                   │
+        Transformer Layers (x2)
+                   │
+     ┌-----─----─-----─-----┐
+     │ Early Mid  Early Final  Final │
+     └----------------------------┘
 
-If you find this library helpful in your research, please cite:
+🔢 Dataset
 
-@misc{your2025lnn,
-  author = {Your Name},
-  title = {Liquid Neural Networks (LNN) Library},
-  year = {2025},
-  publisher = {GitHub},
-  journal = {GitHub Repository},
-  howpublished = {\url{https://github.com/yourusername/lnn}}
-}
+DVS Gesture Dataset (from iniLabs)
 
-📧 Contact
+Format: .aedat 3.1
 
-For questions, feature requests, or discussions, reach out:
+11 classes (e.g., hand wave, clap, etc.)
 
-GitHub Issues: https://github.com/yourusername/lnn/issues
+Each file contains events: (x, y, timestamp, polarity)
 
-Email: your.email@example.com
+Augmentations:
 
-📜 License
+Spatial jitter
 
-This project is licensed under the MIT License. See LICENSE for details.
+Temporal scaling & cropping
 
-Built with ❤️ for the AI and Machine Learning Community.
+Polarity flipping
+
+Additive Gaussian noise
+
+Normalization:
+
+Time normalization between [0,1]
+
+Poisson spike binning (optional)
+
+🔬 Results (In Progress)
+
+Observations:
+
+High training accuracy (>90%) but test generalization is limited
+
+Overfitting observed despite hybrid loss and data augmentation
+
+Temporal attention helps stabilize late-stage predictions
+
+Spike sparsity improves with adaptive thresholds
+
+Next Experiments:
+
+Ablation studies: Remove ConvSNN, LNN, Transformer independently
+
+Self-supervised pretraining: Use supervised contrastive loss
+
+Generalization benchmarks: Apply to N-MNIST, SHD
+
+Hardware compatibility: Simulate energy use via MACs and spike rate
+
+📈 Metrics Tracked
+
+Accuracy / CrossEntropy Loss
+
+Spike Rate (per-layer)
+
+Threshold Adaptation Curve
+
+Membrane Potential Heatmaps
+
+Temporal Prediction Consistency
+
+Early Exit Usage Rate
+
+🫡 Broader Impact
+
+This work contributes to:
+
+Real-time, low-power AI for edge computing
+
+Biologically grounded neural architectures
+
+Bridging the gap between connectomics and artificial networks
+
+Potential applications in prosthetics, neuromorphic robotics, and surveillance
+
+🤝 Call for Mentorship & Collaboration
+
+I'm currently seeking research mentorship from faculty or labs working at the intersection of:
+
+Spiking Neural Networks (SNNs)
+
+Neuromorphic Engineering
+
+Temporal Attention / Transformer Models
+
+Brain-inspired Learning Rules
+
+This project is under active development, and I hope to grow it into a publication-worthy contribution under the right guidance.
+
+If you're interested in collaborating or offering feedback, please feel free to reach out!
