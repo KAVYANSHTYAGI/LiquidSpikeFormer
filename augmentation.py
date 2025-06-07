@@ -4,7 +4,7 @@ import torch
 
 class RandomTemporalCrop:
     """
-    Randomly crops the event sequence to a fraction of its original duration.
+
     """
     def __init__(self, crop_frac: float = 0.8):
         assert 0 < crop_frac <= 1.0, "crop_frac must be in (0,1]"
