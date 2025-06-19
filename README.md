@@ -1,190 +1,97 @@
-LiquidSpikeFormer: Hybrid SNN-LNN-Transformer Architecture for Event-Based Vision
 
-A biologically inspired, hybrid deep learning architecture combining Spiking Neural Networks, Liquid Time-Constant Neurons, and Transformer-based temporal attention for robust and energy-efficient event-driven gesture recognition.
+# 🌊 LiquidSpikeFormer: Neuromorphic Hybrid SNN-Transformer Architecture
 
-📅 Motivation
+## 🚩 Overview
 
-Traditional deep learning models operate on synchronous, dense image data. However, biological brains process information through sparse, asynchronous spike signals. Event cameras like Dynamic Vision Sensors (DVS) mimic this biological process by emitting events only when pixel intensity changes occur. These sensors offer high temporal resolution and low energy cost, but pose unique challenges:
+**LiquidSpikeFormer** is an advanced neuromorphic deep learning architecture specifically designed to tackle the complexities and challenges associated with processing sparse, asynchronous, and event-driven data from Dynamic Vision Sensors (DVS).
 
-Sparse and irregular input data
+Leveraging the synergy of **Spiking Neural Networks (SNNs)**, **Liquid Neural Networks (LNNs)**, and state-of-the-art **Transformer** models, this project explores efficient and biologically plausible ways to significantly enhance accuracy, latency, and generalization performance in event-based recognition tasks.
 
-Need for real-time processing
+---
 
-Lack of standard architectures
+## 🎯 Research Problem
 
-LiquidSpikeFormer bridges this gap using:
+### **Core Problem:**
 
-Spiking dynamics for biological plausibility
+> **How can we effectively and efficiently leverage the rich temporal dynamics and sparsity inherent in event-based sensor data (e.g., DVS) to achieve high-accuracy, low-latency, and power-efficient recognition tasks?**
 
-Liquid neurons for dynamic time constants
+### **Challenges Addressed:**
+- **Temporal Sparsity:** Handling asynchronous, irregularly spaced event data.
+- **Multiscale Dynamics:** Integrating both fine-scale rapid and coarse-scale slower temporal patterns.
+- **Biological Plausibility:** Designing neuromorphic-friendly, energy-efficient architectures.
+- **Generalization:** Achieving robust performance despite limited labeled data.
 
-Transformer layers for global sequence modeling
+---
 
-This makes it suitable for neuromorphic hardware and applications such as robotics, AR/VR, prosthetics, and smart surveillance.
+## 📌 Current Model Architecture
 
-🔍 Research Objectives
+The **LiquidSpikeFormer** combines multiple novel modules:
 
-Model biologically plausible, energy-efficient gesture recognition using event data.
+### 1️⃣ **Spike Encoding at Multiple Temporal Scales:**
+- Dual (fine/coarse) spike encoders to capture rich multi-scale temporal information.
 
-Explore hybrid learning dynamics: SNNs for sparse input, LNNs for time-dependence, and Transformers for global context.
+### 2️⃣ **ConvSNN Spatiotemporal Blocks:**
+- Separate spatial and temporal convolutions for rich feature extraction from sparse spike-based events.
 
-Evaluate generalization and temporal robustness across time-variant DVS input streams.
+### 3️⃣ **Liquid Time-Constant SNN (LNN-inspired blocks):**
+- Adaptive spiking dynamics through learnable liquid neural states, incorporating neuromodulation for context-dependent adaptation.
 
-Move toward publishable results at top-tier AI venues (NeurIPS, ICLR) by refining architecture, interpretability, and training stability.
+### 4️⃣ **Transformer Sequence Modeling:**
+- Post-spiking transformers capturing long-term temporal dependencies and complex interactions within the spiking sequences.
 
-🔧 Architecture Breakdown
+### 5️⃣ **Multiple Early-Exit Classifiers:**
+- Enables deep supervision, reduces inference latency, and improves model efficiency during training.
 
-1. Dual Spike Encoders (Fine + Coarse)
+---
 
-Encodes DVS input into discrete time-binned spike tensors
+## 📈 Expected Impacts
 
-Captures high-frequency and low-frequency event patterns
+Implementing this architecture is expected to:
+- Significantly outperform traditional CNN/Transformer methods in event-based datasets.
+- Achieve state-of-the-art accuracy and generalization on tasks like gesture recognition.
+- Drastically reduce power consumption, making it ideal for real-time applications in IoT, robotics, autonomous systems, and neuromorphic hardware platforms.
 
-2. Conv-SNN Spatial-Temporal Blocks
+---
 
-2D convolution per time bin + temporal 1D convolution
+## 🚀 Future Novelty & Research Directions
 
-Mimics early visual cortex (V1-like feature detection)
+To push this research frontier further, we plan to explore:
 
-3. Liquid Time-Constant Blocks
+- **Dynamically Neuromodulated Liquid Transformers:** Adaptive attention and positional embeddings modulated by global spike dynamics.
+- **Meta-Spiking Fusion with Hyper-SNNs:** Leveraging spike-based hypernetworks for adaptive fusion strategies.
+- **Liquid Reservoir Transformers:** Incorporating reservoir computing dynamics directly into transformer positional encoding.
+- **Spiking Equilibrium Attention Networks (SEANs):** Integrating equilibrium network dynamics to dynamically determine computation depth per input sequence.
+- **Self-supervised Spiking Contrastive Predictive Coding (S-SCPC):** Developing powerful spike-level representation learning methods for significantly enhanced generalization.
 
-Neurons with learned dynamic decay (tau)
+---
 
-Simulates membrane potential and adaptive thresholds
+## ⚙️ Installation & Usage
 
-One block with neuromodulated gating
+_Coming soon!_
 
-4. Spiking Transformer Layers
+---
 
-Sparse sequence of spikes processed via attention
+## 🧠 Contributing
 
-Allows long-range temporal dependency modeling
+We welcome contributions to explore these exciting research directions:
+- Open issues for new research ideas or experiments.
+- Submit pull requests for improving existing implementations.
 
-5. Early-Exit Classifiers
+---
 
-Heads after key stages: early-mid, early-final, and final
+## 📚 Publications
 
-Enable low-latency prediction (real-time response)
+_Coming soon!_
 
-6. Hybrid Spiking Loss
+---
 
-CrossEntropy + spike sparsity + membrane stability + temporal consistency + threshold variance regularization
+## 🛠️ Contact
 
-🔮 Model Diagram (Conceptual)
+For collaboration or questions, please reach out to:
+- **Kavyansh Tyagi**
+- GitHub: [KAVYANSHTYAGI](https://github.com/KAVYANSHTYAGI)
 
-                DVS Events
-                   │
-        ┌---------------------┐
-        │  Fine Spike Encoder  │
-        │ Coarse Spike Encoder │
-        └----------─--------┘
-                   │
-       Conv-SNN Spatial Temporal Blocks
-                   │
-          Conv Projection to Embed Dim
-                   │
-     ┌----------------------------┐
-     │ PatchEmbeds + Frame Embeds │
-     └-------------─----------┘
-                   │
-        Merge Projection (4 Streams)
-                   │
-      Liquid Time Constant Block 1
-                   │
-      Liquid Time Constant Block 2
-                   │
-        Transformer Layers (x2)
-                   │
-     ┌-----─----─-----─-----┐
-     │ Early Mid  Early Final  Final │
-     └----------------------------┘
+---
 
-🔢 Dataset
-
-DVS Gesture Dataset (from iniLabs)
-
-Format: .aedat 3.1
-
-11 classes (e.g., hand wave, clap, etc.)
-
-Each file contains events: (x, y, timestamp, polarity)
-
-Augmentations:
-
-Spatial jitter
-
-Temporal scaling & cropping
-
-Polarity flipping
-
-Additive Gaussian noise
-
-Normalization:
-
-Time normalization between [0,1]
-
-Poisson spike binning (optional)
-
-🔬 Results (In Progress)
-
-Observations:
-
-High training accuracy (>90%) but test generalization is limited
-
-Overfitting observed despite hybrid loss and data augmentation
-
-Temporal attention helps stabilize late-stage predictions
-
-Spike sparsity improves with adaptive thresholds
-
-Next Experiments:
-
-Ablation studies: Remove ConvSNN, LNN, Transformer independently
-
-Self-supervised pretraining: Use supervised contrastive loss
-
-Generalization benchmarks: Apply to N-MNIST, SHD
-
-Hardware compatibility: Simulate energy use via MACs and spike rate
-
-📈 Metrics Tracked
-
-Accuracy / CrossEntropy Loss
-
-Spike Rate (per-layer)
-
-Threshold Adaptation Curve
-
-Membrane Potential Heatmaps
-
-Temporal Prediction Consistency
-
-Early Exit Usage Rate
-
-🫡 Broader Impact
-
-This work contributes to:
-
-Real-time, low-power AI for edge computing
-
-Biologically grounded neural architectures
-
-Bridging the gap between connectomics and artificial networks
-
-Potential applications in prosthetics, neuromorphic robotics, and surveillance
-
-🤝 Call for Mentorship & Collaboration
-
-I'm currently seeking research mentorship from faculty or labs working at the intersection of:
-
-Spiking Neural Networks (SNNs)
-
-Neuromorphic Engineering
-
-Temporal Attention / Transformer Models
-
-Brain-inspired Learning Rules
-
-This project is under active development, and I hope to grow it into a publication-worthy contribution under the right guidance.
-
-If you're interested in collaborating or offering feedback, please feel free to reach out!
+Let's push the boundaries of neuromorphic deep learning together! 🚀
+```
